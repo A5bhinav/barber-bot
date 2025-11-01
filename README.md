@@ -1,4 +1,4 @@
-# Instagram DM Booking Bot for Barbers
+# Instagram DM Booking Bot for Barber
 
 An automated Instagram DM bot that helps barbers manage appointment bookings through Instagram direct messages. The bot uses OpenAI for natural conversation and integrates with Google Calendar for appointment management.
 
