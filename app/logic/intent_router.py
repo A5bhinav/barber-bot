@@ -2,7 +2,7 @@ import os
 import logging
 from datetime import datetime
 from typing import Dict, Optional
-from openai import AsyncOpenAI
+from anthropic import AsyncAnthropic
 from logic.responses import ResponseGenerator
 from logic.booking import BookingManager
 from services.calendar import CalendarService
@@ -14,7 +14,7 @@ class IntentRouter:
     """Routes messages based on detected intent and manages conversation state"""
 
     def __init__(self, response_generator: ResponseGenerator, calendar_service: CalendarService):
-        self.openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.anthropic_client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         self.response_generator = response_generator
         self.booking_manager = BookingManager(calendar_service)
         
@@ -61,7 +61,7 @@ class IntentRouter:
 
     async def _detect_intent(self, message_text: str, state: Dict) -> str:
         """
-        Use OpenAI to detect user intent from message
+        Use Claude to detect user intent from message
         
         Returns one of: booking_inquiry, confirm_booking, cancel_booking, 
                        general_question, greeting, other
@@ -82,17 +82,17 @@ Classify the user's message into ONE of these intents:
 Respond with ONLY the intent name, nothing else."""
 
         try:
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": message_text}
-                ],
+            response = await self.anthropic_client.messages.create(
+                model="claude-3-5-haiku-20241022",
+                max_tokens=20,
                 temperature=0.3,
-                max_tokens=20
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": message_text}
+                ]
             )
 
-            intent = response.choices[0].message.content.strip().lower()
+            intent = response.content[0].text.strip().lower()
             return intent
 
         except Exception as e:
@@ -165,7 +165,7 @@ Respond with ONLY the intent name, nothing else."""
             return self.response_generator.fallback_response()
 
     async def _extract_date_time(self, message_text: str) -> Optional[datetime]:
-        """Extract date/time from user message using OpenAI"""
+        """Extract date/time from user message using Claude"""
         
         system_prompt = """Extract the date and time from the user's message.
 If no specific time is mentioned, assume they want afternoon (2 PM).
@@ -179,17 +179,17 @@ Examples:
 """
 
         try:
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Today is {datetime.now().strftime('%Y-%m-%d')}. Message: {message_text}"}
-                ],
+            response = await self.anthropic_client.messages.create(
+                model="claude-3-5-haiku-20241022",
+                max_tokens=50,
                 temperature=0.3,
-                max_tokens=50
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": f"Today is {datetime.now().strftime('%Y-%m-%d')}. Message: {message_text}"}
+                ]
             )
 
-            result = response.choices[0].message.content.strip()
+            result = response.content[0].text.strip()
             
             if result == "NONE":
                 return None
@@ -216,7 +216,7 @@ Examples:
         return None
 
     async def _answer_general_question(self, message_text: str, history: list) -> str:
-        """Use OpenAI to answer general questions about the barbershop"""
+        """Use Claude to answer general questions about the barbershop"""
         
         barber_name = os.getenv("BARBER_NAME", "our barber")
         
@@ -231,18 +231,23 @@ Keep responses friendly, concise, and encourage booking an appointment.
 If you don't know something specific, say so and offer to have them book a consultation."""
 
         try:
-            # Use conversation history for context
-            messages = [{"role": "system", "content": system_prompt}]
-            messages.extend(history[-4:])  # Last 4 messages for context
+            # Build messages from history (last 4 messages for context)
+            messages = []
+            for msg in history[-4:]:
+                messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
 
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=messages,
+            response = await self.anthropic_client.messages.create(
+                model="claude-3-5-haiku-20241022",
+                max_tokens=150,
                 temperature=0.7,
-                max_tokens=150
+                system=system_prompt,
+                messages=messages
             )
 
-            return response.choices[0].message.content.strip()
+            return response.content[0].text.strip()
 
         except Exception as e:
             logger.error(f"Error answering general question: {str(e)}")

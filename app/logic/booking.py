@@ -132,12 +132,21 @@ class BookingManager:
         return self.calendar_service.cancel_appointment(event_id)
 
     def is_business_hours(self, check_time: datetime) -> bool:
-        """Check if a given time falls within business hours"""
-        start_hour, start_minute = map(int, self.business_hours_start.split(':'))
-        end_hour, end_minute = map(int, self.business_hours_end.split(':'))
-
+        """Check if a given time falls within business hours (supports split schedules)"""
+        start_times = self.business_hours_start.split(';')
+        end_times = self.business_hours_end.split(';')
+        
         time_minutes = check_time.hour * 60 + check_time.minute
-        start_minutes = start_hour * 60 + start_minute
-        end_minutes = end_hour * 60 + end_minute
-
-        return start_minutes <= time_minutes < end_minutes  
+        
+        # Check if time falls in any of the business hour blocks
+        for start_str, end_str in zip(start_times, end_times):
+            start_hour, start_minute = map(int, start_str.strip().split(':'))
+            end_hour, end_minute = map(int, end_str.strip().split(':'))
+            
+            start_minutes = start_hour * 60 + start_minute
+            end_minutes = end_hour * 60 + end_minute
+            
+            if start_minutes <= time_minutes < end_minutes:
+                return True
+        
+        return False

@@ -103,11 +103,12 @@ class CalendarService:
     ) -> List[datetime]:
         """
         Get available time slots for a given date
+        Supports split schedules (e.g., morning and evening hours)
         
         Args:
             date: The date to check availability
-            business_hours_start: Start of business hours (HH:MM)
-            business_hours_end: End of business hours (HH:MM)
+            business_hours_start: Start of business hours (HH:MM or HH:MM;HH:MM for split schedule)
+            business_hours_end: End of business hours (HH:MM or HH:MM;HH:MM for split schedule)
             slot_duration_minutes: Duration of each slot
             
         Returns:
@@ -117,13 +118,27 @@ class CalendarService:
             logger.warning("Calendar service not initialized, returning empty slots")
             return []
 
-        # Parse business hours
-        start_hour, start_minute = map(int, business_hours_start.split(':'))
-        end_hour, end_minute = map(int, business_hours_end.split(':'))
-
-        # Create start and end times for the day
-        day_start = date.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
-        day_end = date.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
+        # Parse business hours - support split schedules
+        start_times = business_hours_start.split(';')
+        end_times = business_hours_end.split(';')
+        
+        if len(start_times) != len(end_times):
+            logger.error("Mismatched business hours configuration")
+            return []
+        
+        # Create time blocks
+        time_blocks = []
+        for start_str, end_str in zip(start_times, end_times):
+            start_hour, start_minute = map(int, start_str.strip().split(':'))
+            end_hour, end_minute = map(int, end_str.strip().split(':'))
+            
+            block_start = date.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
+            block_end = date.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
+            time_blocks.append((block_start, block_end))
+        
+        # Use the first block for API query bounds (will filter by blocks later)
+        day_start = time_blocks[0][0]
+        day_end = time_blocks[-1][1]
 
         try:
             # Get existing events for the day
@@ -137,12 +152,13 @@ class CalendarService:
 
             events = events_result.get('items', [])
 
-            # Generate all possible slots
+            # Generate all possible slots across all time blocks
             all_slots = []
-            current_slot = day_start
-            while current_slot + timedelta(minutes=slot_duration_minutes) <= day_end:
-                all_slots.append(current_slot)
-                current_slot += timedelta(minutes=slot_duration_minutes)
+            for block_start, block_end in time_blocks:
+                current_slot = block_start
+                while current_slot + timedelta(minutes=slot_duration_minutes) <= block_end:
+                    all_slots.append(current_slot)
+                    current_slot += timedelta(minutes=slot_duration_minutes)
 
             # Remove slots that conflict with existing events
             available_slots = []
