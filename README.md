@@ -6,7 +6,7 @@ An automated Instagram DM bot that helps barbers manage appointment bookings thr
 
 - 🤖 Automated Instagram DM responses
 - 📅 Google Calendar integration for appointment booking
-- 🧠 Natural language processing with OpenAI GPT-3.5
+- 🧠 Natural language processing with Claude Haiku-3.5
 - ✅ Automatic appointment confirmation
 - 📱 Real-time availability checking
 - 💬 Friendly, conversational interface
