@@ -16,6 +16,7 @@ from services.instagram import InstagramService
 from services.calendar import CalendarService
 from logic.intent_router import IntentRouter
 from logic.responses import ResponseGenerator
+import json
 
 # Load environment variables
 load_dotenv()
@@ -69,6 +70,9 @@ async def handle_webhook(request: Request):
     try:
         body = await request.json()
         logger.info(f"Received webhook: {body}")
+        
+        # ADD THIS LINE - log the entire payload
+        logger.info(f"FULL WEBHOOK PAYLOAD: {json.dumps(body, indent=2)}")
 
         # Process the webhook data
         if body.get("object") == "instagram":
